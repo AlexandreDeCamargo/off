@@ -301,7 +301,6 @@ def correlation_polarization_correction(
     """
 
     log_rho = jnp.log2(jnp.clip(den.sum(axis=1), a_min=clip_cte))
-    # assert not jnp.isnan(log_rho).any() and not jnp.isinf(log_rho).any()
     log_rs = jnp.log2((3 / (4 * jnp.pi)) ** (1 / 3)) - log_rho / 3.0
 
     zeta = jnp.where(den.sum(axis=1) > clip_cte, (den[:, 0] - den[:, 1]) / (den.sum(axis=1)), 0.0)
@@ -325,7 +324,6 @@ def correlation_polarization_correction(
     brs2 = 2 ** (jnp.log2(beta4) + 2 * log_rs)
 
     alphac = 2 * A_ * (1 + ars) * jnp.log(1 + (1 / (2 * A_)) / (brs_1_2 + brs + brs_3_2 + brs2))
-    # assert not jnp.isnan(alphac).any() and not jnp.isinf(alphac).any()
 
     fz = fzeta(zeta) #jnp.round(fzeta(zeta), int(math.log10(clip_cte)))
     z4 = zeta**4 #jnp.round(2 ** (4 * jnp.log2(jnp.clip(zeta, a_min=clip_cte))), int(math.log10(clip_cte)))
@@ -335,7 +333,6 @@ def correlation_polarization_correction(
         + alphac * (fz / (grad(grad(fzeta))(0.0))) * (1 - z4)
         + (e_tilde_PF[:, 1] - e_tilde_PF[:, 0]) * fz * z4
     )
-    # assert not jnp.isnan(e_tilde).any() and not jnp.isinf(e_tilde).any()
 
     return e_tilde
 

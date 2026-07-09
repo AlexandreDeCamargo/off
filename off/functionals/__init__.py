@@ -31,5 +31,5 @@ from .functional import (
 from .kinetic import tf, weizsacker, tf_weizsacker
 from .exchange_correlation import lda, b88, vwn, pw92, lda_b88
 from .external import NuclearPotential
-from .hartree import CoulombPotential, CoulombPotential_
+from .hartree import CoulombPotential
 from .core_correction import KatoCondition, HutcheonCuspCondition

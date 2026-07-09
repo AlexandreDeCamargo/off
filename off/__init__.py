@@ -12,7 +12,7 @@ from .functionals.functional import (
 from .functionals import (
     tf, weizsacker, tf_weizsacker,
     lda, b88, vwn, pw92, lda_b88,
-    NuclearPotential, CoulombPotential, CoulombPotential_,
+    NuclearPotential, CoulombPotential,
     KatoCondition, HutcheonCuspCondition,
 )
 from .quadrature import (

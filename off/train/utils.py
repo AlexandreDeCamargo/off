@@ -36,3 +36,13 @@ def step(
     flow_model = eqx.apply_updates(flow_model, updates)
     
     return loss, flow_model, optimizer_state
+
+
+@eqx.filter_jit
+def eval_energy(flow_model, batch, loss_fn, *loss_args):
+    """Forward-only energy evaluation on a batch (no gradients / no backprop).
+
+    Same energy as ``loss_fn`` but never differentiated, so a much larger batch can be
+    used cheaply for a lower-variance Monte-Carlo estimate. Returns ``(energy, F_values)``.
+    """
+    return loss_fn(flow_model, batch, *loss_args)

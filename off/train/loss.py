@@ -2,7 +2,7 @@ import jax.numpy as jnp
 from typing import NamedTuple
 from ..functionals.kinetic import tf, weizsacker, tf_weizsacker
 from ..functionals.exchange_correlation import lda, b88, vwn, pw92, lda_b88
-from ..functionals.hartree import CoulombPotential_, CoulombPotential
+from ..functionals.hartree import CoulombPotential
 from ..functionals.external import NuclearPotential
 from ..functionals.core_correction import KatoCondition, HutcheonCuspCondition
 from ..functionals.functional import FunctionalInputs, EnergyFunctional
@@ -33,9 +33,7 @@ FUNCTIONAL_CLASSES = {
     'pw92_c': lambda: pw92,
 
     # Hartree
-    'coulomb': CoulombPotential,            # all-pairs (batch²), main
-    'coulomb_': CoulombPotential_,          # element-wise
-    'coulomb_allpairs': CoulombPotential,   # back-compat: old job_params tag
+    'coulomb': CoulombPotential,        
 
     # External
     'np': NuclearPotential,

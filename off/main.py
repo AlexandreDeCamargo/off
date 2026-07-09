@@ -81,7 +81,7 @@ def save_job_params(results_dir, args):
 def main():
     parser = argparse.ArgumentParser()
     # Model parameters
-    parser.add_argument("--mol_name", type=str, default='H',
+    parser.add_argument("--mol_name", type=str, default='H2',
                         help="Molecule name")
     parser.add_argument("--bond_length", type=float, default=4.4,
                         help="Bond length for the molecule (Bohr)")

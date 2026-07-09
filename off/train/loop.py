@@ -11,7 +11,7 @@ from typing import Optional
 from ..flow.equiv_flows import CNF
 from ..utils import one_hot_encode, coordinates, batch_generator, get_solver, get_scheduler
 from ..promolecular.promolecular_dist import make_prior, ProMolecularDensity
-from .utils import step
+from .utils import step, eval_energy
 from .loss import create_loss_function, F_values
 from ..config._config import Config
 
@@ -102,6 +102,8 @@ def training(mol_name: str,
             prior_dist: Optional[ProMolecularDensity] = None,
             checkpoint_dir: str = './checkpoints',
             checkpoint_freq: int = 50,
+            eval_every: int = 1000,
+            eval_batch_size: Optional[int] = None,
             ): 
     """
     Main training loop.
@@ -182,6 +184,12 @@ def training(mol_name: str,
     # Training loop
     df = pd.DataFrame()
     df_ema = pd.DataFrame()
+
+    # Forward-only eval: a larger batch (no backprop) for a lower-variance MC energy.
+    eval_bs = eval_batch_size if eval_batch_size is not None else 10 * batch_size
+    _, eval_key = jrnd.split(key)
+    eval_batches = batch_generator(eval_key, eval_bs, sampling_dist)
+    df_eval = pd.DataFrame()
     
     for itr in range(epochs + 1):
         start_time = time.time()
@@ -197,7 +205,6 @@ def training(mol_name: str,
         elapsed_time = time.time() - start_time
         
         loss_epoch, losses = loss
-        
         # Update EMA
         energies_i_ema, energies_state = energies_ema.update(losses, energies_state)
         
@@ -215,5 +222,20 @@ def training(mol_name: str,
         # Save checkpoint
         if itr % checkpoint_freq == 0 or itr == epochs:
             eqx.tree_serialise_leaves(f"{checkpoint_dir}/checkpoint_{itr}.eqx", flow_model)
+
+        # Large-batch MC energy evaluation (forward only, no gradients)
+        if eval_every and itr % eval_every == 0 and itr != 0:
+            _, f_eval = eval_energy(
+                flow_model, next(eval_batches), grad_loss_fn, solver, Ne, mol)
+            r_eval = {
+                'epoch': itr, 'batch': eval_bs,
+                'E':  float(f_eval.energy - f_eval.cc),
+                'T':  float(f_eval.kin),  'V':  float(f_eval.vnuc),
+                'H':  float(f_eval.hart), 'XC': float(f_eval.xc), 'CC': float(f_eval.cc),
+            }
+            df_eval = pd.concat([df_eval, pd.DataFrame([r_eval])], ignore_index=True)
+            df_eval.to_csv(f"{Config.results_dir}/eval_metrics.csv", index=False)
+            print(f"  [eval @ {itr}]  E = {r_eval['E']:+.6f} Ha  "
+                  f"(batch {eval_bs}, forward-only MC)")
 
     return flow_model, df, df_ema
