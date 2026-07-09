@@ -25,7 +25,6 @@ class CoulombPotential(eqx.Module):
         r2 = x2[:, None] + xp2[None, :] - 2.0 * (x @ xp.T)
         r2 = jnp.maximum(r2, 0.0) + self.eps
         v = jnp.mean(1.0 / jnp.sqrt(r2), axis=-1, keepdims=True)
-        assert 0 
         return 0.5 * (Ne ** 2) * v
 
 
