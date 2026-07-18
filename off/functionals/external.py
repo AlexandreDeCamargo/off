@@ -12,14 +12,14 @@ class NuclearPotential(eqx.Module):
 
     Parameters
     ----------
-    eps : float, optional
+    clip_cte : float, optional
         Small constant for numerical stability, by default 1e-5.
     """
 
-    eps: float
+    clip_cte: float
 
-    def __init__(self, eps=1e-5):
-        self.eps = eps
+    def __init__(self, clip_cte=1e-5):
+        self.clip_cte = clip_cte
 
     def __call__(self, den, score, x, Ne, mol, xp) -> Float[Array, "batch"]:
         r"""
@@ -42,7 +42,7 @@ class NuclearPotential(eqx.Module):
             Electron-nuclei attraction at each point (up to the rho factor).
         """
         def _potential(pts, molecule):
-            r = jnp.sqrt(jnp.sum((pts - molecule['coords']) ** 2, axis=1)) + self.eps
+            r = jnp.sqrt(jnp.sum((pts - molecule['coords']) ** 2, axis=1)) + self.clip_cte
             return molecule['z'] / r
 
         r = vmap(_potential, in_axes=(None, 0), out_axes=-1)(x, mol)

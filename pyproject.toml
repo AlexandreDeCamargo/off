@@ -18,9 +18,6 @@ classifiers = [
 ]
 dependencies = [
     "jax>=0.6.0",
-    # GPU is the default on Linux x86_64 (CUDA 12). macOS/Windows have no CUDA
-    # wheels, so they install the CPU build automatically. JAX then selects
-    # GPU-or-CPU at runtime (uses the GPU when present, else falls back to CPU).
     "jax[cuda12]>=0.6.0; sys_platform == 'linux' and platform_machine == 'x86_64'",
     "jaxlib>=0.6.0",
     "equinox>=0.12.0",

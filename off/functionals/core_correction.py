@@ -17,21 +17,21 @@ class KatoCondition(eqx.Module):
     ----------
     a : float, optional
         Envelope decay prefactor, by default 2/3.
-    eps : float, optional
+    clip_cte : float, optional
         Small constant for numerical stability, by default 1e-5.
     """
 
     a: float
-    eps: float
+    clip_cte: float
 
-    def __init__(self, a=2.0/3.0, eps=1e-5):
+    def __init__(self, a=2.0/3.0, clip_cte=1e-5):
         self.a = a
-        self.eps = eps
+        self.clip_cte = clip_cte
 
     def __call__(self, den, score, x, Ne, mol, xp) -> Float[Array, "batch"]:
         r"""Uses x, score, Ne, mol; den, xp unused. Returns the cusp penalty per point."""
         def _wi(pts, molecule):
-            r = jnp.sqrt(jnp.sum((pts - molecule['coords']) ** 2, axis=1) + self.eps ** 2)
+            r = jnp.sqrt(jnp.sum((pts - molecule['coords']) ** 2, axis=1) + self.clip_cte ** 2)
             return jnp.exp(-self.a * molecule['z'] * r)
 
         wi = vmap(_wi, in_axes=(None, 0), out_axes=-1)(x, mol)
@@ -59,14 +59,14 @@ class HutcheonCuspCondition(eqx.Module):
 
     Parameters
     ----------
-    eps : float, optional
+    clip_cte : float, optional
         Small constant for numerical stability, by default 1e-8.
     """
 
-    eps: float
+    clip_cte: float
 
-    def __init__(self, eps=1e-8):
-        self.eps = eps
+    def __init__(self, clip_cte=1e-8):
+        self.clip_cte = clip_cte
 
     def __call__(self, den, score, x, Ne, mol, xp) -> Float[Array, "batch 1"]:
         r"""Uses x, den, score, Ne, mol; xp unused. Returns the cusp cost per point."""
@@ -74,11 +74,11 @@ class HutcheonCuspCondition(eqx.Module):
 
         def per_atom(R_i, Z_i):
             r_vec = x - R_i
-            r_norm = jnp.sqrt(jnp.sum(r_vec ** 2, axis=-1) + self.eps ** 2)
+            r_norm = jnp.sqrt(jnp.sum(r_vec ** 2, axis=-1) + self.clip_cte ** 2)
             r_hat = r_vec / r_norm[:, None]
             w_i = jnp.sqrt(jnp.pi / Z_i ** 3) * jnp.exp(-Z_i * r_norm)
             cusp_sq = jnp.sum((score + 2.0 * Z_i * r_hat) ** 2, axis=-1)
             return cusp_sq * w_i
 
         total = jnp.sum(jax.vmap(per_atom)(coords, z), axis=0)
-        return (Ne * den.squeeze(-1) * total)[:, None]
+        return (Ne ** 2 * den.squeeze(-1) * total)[:, None]

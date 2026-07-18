@@ -10,20 +10,20 @@ class CoulombPotential(eqx.Module):
 
     Parameters
     ----------
-    eps : float, optional
+    clip_cte : float, optional
         Small constant for numerical stability, by default 1e-5.
     """
 
-    eps: float
+    clip_cte: float
 
-    def __init__(self, eps=1e-5):
-        self.eps = eps
+    def __init__(self, clip_cte=1e-5):
+        self.clip_cte = clip_cte
 
     def __call__(self, den, score, x, Ne, mol, xp) -> Float[Array, "batch 1"]:
         x2 = jnp.sum(x * x, axis=-1)
         xp2 = jnp.sum(xp * xp, axis=-1)
         r2 = x2[:, None] + xp2[None, :] - 2.0 * (x @ xp.T)
-        r2 = jnp.maximum(r2, 0.0) + self.eps
+        r2 = jnp.maximum(r2, 0.0) + self.clip_cte
         v = jnp.mean(1.0 / jnp.sqrt(r2), axis=-1, keepdims=True)
         return 0.5 * (Ne ** 2) * v
 
@@ -39,15 +39,15 @@ class CoulombPotential_element_wise(eqx.Module):
 
     Parameters
     ----------
-    eps : float, optional
+    clip_cte : float, optional
         Small constant for numerical stability, by default 1e-5.
     """
 
-    eps: float
+    clip_cte: float
 
-    def __init__(self, eps=1e-5):
-        self.eps = eps
+    def __init__(self, clip_cte=1e-5):
+        self.clip_cte = clip_cte
 
     def __call__(self, den, score, x, Ne, mol, xp) -> Float[Array, "batch 1"]:
-        z = jnp.sum((x - xp) ** 2 + self.eps, axis=-1, keepdims=True)
+        z = jnp.sum((x - xp) ** 2 + self.clip_cte, axis=-1, keepdims=True)
         return 0.5 * (Ne ** 2) / jnp.sqrt(z)

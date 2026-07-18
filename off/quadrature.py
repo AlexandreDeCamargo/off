@@ -114,11 +114,16 @@ def rho_on_grid(model, solver, prior, grid_coords, chunk=256):
 
 
 def quadrature_energy(functional, x_np, rho_np, sc_np, grid_coords, grid_weights,
-                      mol_dict, Ne, chunk=256):
+                      mol_dict, Ne, chunk=256, aux_coords=None, aux_rho_np=None,
+                      aux_weights=None):
     """Integrate every energy term on the grid.
 
-    The local terms use ``functional``'s component functionals; the Hartree term
-    is the grid double sum (true 1/r), not the functional's MC pairwise estimator.
+    The local terms use ``functional``'s component functionals.  The Hartree term is a
+    real-space grid double sum (true 1/r), not the MC pairwise estimator.  If
+    ``aux_coords``/``aux_rho_np``/``aux_weights`` are given it uses the TWO-GRID (offset)
+    estimator — the main grid paired against a second Becke grid whose points never
+    coincide, so no self-diagonal is dropped; otherwise it falls back to the single-grid
+    (masked-diagonal) sum, which can under-count the near field.
     """
     w  = np.array(grid_weights)
     G  = rho_np.shape[0]
@@ -145,10 +150,23 @@ def quadrature_energy(functional, x_np, rho_np, sc_np, grid_coords, grid_weights
     # Hartree — grid double sum
     gc = np.array(grid_coords)
     vc = np.zeros(G)
-    for i in range(0, G, chunk):
-        xi = gc[i:i+chunk]
-        r2 = np.sum((gc[None, :, :] - xi[:, None, :]) ** 2, axis=-1)
-        vc[i:i+chunk] = np.dot(1. / np.sqrt(np.where(r2 == 0., np.inf, r2)), w * rho_np)
+    if aux_coords is not None:
+        # TWO-GRID (offset) estimator: main grid (i) x auxiliary grid (j). The grids use
+        # different Becke levels so their points never coincide -> 1/|r_i - r'_j| is never
+        # singular and nothing is dropped, removing the single-grid self-interaction
+        # under-count.   V_H = 0.5 Ne^2 * Σ_i w_i ρ_i Σ_j (w'_j ρ'_j)/|r_i - r'_j|
+        gax      = np.array(aux_coords)
+        aux_meas = np.array(aux_weights) * np.asarray(aux_rho_np)          # w'_j ρ'_j
+        for i in range(0, G, chunk):
+            xi = gc[i:i+chunk]
+            r2 = np.sum((gax[None, :, :] - xi[:, None, :]) ** 2, axis=-1)  # (chunk, G_aux)
+            vc[i:i+chunk] = np.dot(1. / np.sqrt(np.where(r2 == 0., np.inf, r2)), aux_meas)
+    else:
+        # Single grid vs itself, self-diagonal masked (can under-count the near field).
+        for i in range(0, G, chunk):
+            xi = gc[i:i+chunk]
+            r2 = np.sum((gc[None, :, :] - xi[:, None, :]) ** 2, axis=-1)
+            vc[i:i+chunk] = np.dot(1. / np.sqrt(np.where(r2 == 0., np.inf, r2)), w * rho_np)
     V_H = float(0.5 * Ne ** 2 * functional._integrate(jnp.asarray(vc), measure))
 
     # Nuclear repulsion 
@@ -162,7 +180,7 @@ def quadrature_energy(functional, x_np, rho_np, sc_np, grid_coords, grid_weights
 
 # ── high-level entry points ───────────────────────────────────────────────────
 def grid_energy(model, prior, solver, coords, z, atoms, Ne, functional, *,
-                grid_level=3, units="bohr", basis="6-31G(d,p)", chunk=256):
+                grid_level=3, aux_grid_level=None, units="bohr", basis="6-31G(d,p)", chunk=256):
     """Build the grid, evaluate ρ_φ, and integrate all energy terms.
 
     Parameters
@@ -171,6 +189,10 @@ def grid_energy(model, prior, solver, coords, z, atoms, Ne, functional, *,
     coords, z, atoms, Ne : molecular geometry / charges / electron count.
     functional           : an EnergyFunctional (e.g. from build_energy_functional).
     grid_level           : PySCF grid level (the "grid size").
+    aux_grid_level       : optional int.  If given, V_H uses the TWO-GRID (offset)
+                           estimator — the main grid paired against a second Becke grid at
+                           this level — avoiding the masked-diagonal under-count of the
+                           single-grid Hartree.  None -> single-grid (masked) V_H.
     units                : 'bohr' or 'angstrom' — how `coords` are given; the flow
                            works in Bohr, so 'angstrom' inputs are converted.
     Returns the energy dict plus 'Ne_integral'.
@@ -180,27 +202,42 @@ def grid_energy(model, prior, solver, coords, z, atoms, Ne, functional, *,
     coords_bohr = coords if unit == "Bohr" else coords * AA_TO_BOHR
     gc, gw = build_grid(atoms, coords, Ne, grid_level=grid_level, basis=basis, unit=unit)
     x_np, rho_np, sc_np = rho_on_grid(model, solver, prior, gc, chunk=chunk)
+
+    aux_coords = aux_rho = aux_w = None
+    if aux_grid_level is not None:
+        aux_coords, aux_w = build_grid(atoms, coords, Ne, grid_level=aux_grid_level,
+                                       basis=basis, unit=unit)
+        _, aux_rho, _ = rho_on_grid(model, solver, prior, aux_coords, chunk=chunk)
+
     mol_dict = {'coords': jnp.asarray(coords_bohr, dtype=jnp.float64), 'z': jnp.asarray(z)}
-    en = quadrature_energy(functional, x_np, rho_np, sc_np, gc, gw, mol_dict, Ne, chunk=chunk)
+    en = quadrature_energy(functional, x_np, rho_np, sc_np, gc, gw, mol_dict, Ne, chunk=chunk,
+                           aux_coords=aux_coords, aux_rho_np=aux_rho, aux_weights=aux_w)
     en['Ne_integral'] = float(np.dot(np.array(gw), Ne * rho_np))
     return en
 
 
-def grid_energy_from_checkpoint(results_dir, *, grid_level=3, basis="6-31G(d,p)",
-                                units="bohr", chunk=256, recompute=False, cache=True):
+def grid_energy_from_checkpoint(results_dir, *, grid_level=3, aux_grid_level=None,
+                                basis="6-31G(d,p)", units="bohr", chunk=256,
+                                recompute=False, cache=True):
     """One call from a trained run directory: read job_params.json (functional +
     geometry), load the last checkpoint, and integrate.  The geometry comes from
     ``coordinates`` (always Bohr), so no units flag is needed here.
 
-    The result is cached in ``results_dir/energy_summary.json`` — pass
-    ``recompute=True`` to ignore an existing cache, or ``cache=False`` to skip
-    reading/writing it.
+    ``aux_grid_level`` (optional) switches V_H to the two-grid (offset) estimator; see
+    :func:`grid_energy`.  The result is cached in ``results_dir/energy_summary.json``
+    together with the grid setup — a cached summary is reused only when both
+    ``grid_level`` and ``aux_grid_level`` match the request.  Pass ``recompute=True`` to
+    ignore the cache, or ``cache=False`` to skip reading/writing it.
     """
     results_dir = Path(results_dir)
     summary_path = results_dir / "energy_summary.json"
     if cache and not recompute and summary_path.exists():
         with open(summary_path) as f:
-            return json.load(f)
+            cached = json.load(f)
+        if (cached.get("grid_level") == grid_level
+                and cached.get("aux_grid_level") == aux_grid_level):
+            return cached
+        # different grid setup (or a pre-existing summary lacking these keys) -> recompute
 
     with open(results_dir / "job_params.json") as f:
         p = json.load(f)
@@ -212,8 +249,10 @@ def grid_energy_from_checkpoint(results_dir, *, grid_level=3, basis="6-31G(d,p)"
         external_name=p['external'], core_correction_name=p['core_correction'],
     )
     en = grid_energy(model, prior, solver, coords, z, atoms, Ne, functional,
-                     grid_level=grid_level, units=units, basis=basis, chunk=chunk)
-    en.update(epoch=epoch, mol_name=p['mol_name'], bond_length=p['bond_length'])
+                     grid_level=grid_level, aux_grid_level=aux_grid_level,
+                     units=units, basis=basis, chunk=chunk)
+    en.update(epoch=epoch, mol_name=p['mol_name'], bond_length=p['bond_length'],
+              grid_level=grid_level, aux_grid_level=aux_grid_level)
     if cache:
         with open(summary_path, "w") as f:
             json.dump(en, f, indent=4)
@@ -222,7 +261,11 @@ def grid_energy_from_checkpoint(results_dir, *, grid_level=3, basis="6-31G(d,p)"
 
 def _print_energy(results_dir, en):
     print(f"\n{results_dir}")
-    print(f"  mol={en.get('mol_name')}  R={en.get('bond_length')}  epoch={en.get('epoch')}")
+    grid = f"grid={en.get('grid_level')}"
+    if en.get('aux_grid_level') is not None:
+        grid += f"+aux{en.get('aux_grid_level')}"
+    print(f"  mol={en.get('mol_name')}  R={en.get('bond_length')}  "
+          f"epoch={en.get('epoch')}  [{grid}]")
     print("  " + "-" * 36)
     for k in ("T", "V_N", "V_H", "E_X", "E_C", "E_CC", "E_NN"):
         print(f"  {k:8s} = {en[k]:+.6f} Ha")
@@ -239,6 +282,10 @@ def main():
                     help="bl_* run dir(s) with job_params.json and Checkpoints/ "
                          "(shell globs like Results/H2/<method>/bl_* are fine)")
     ap.add_argument("--grid_level", type=int, default=1, help="PySCF grid level")
+    ap.add_argument("--aux_grid_level", type=int, default=None,
+                    help="auxiliary Becke grid level for a TWO-GRID (offset) Hartree "
+                         "estimator (avoids the single-grid masked-diagonal under-count); "
+                         "omit for the single-grid V_H")
     ap.add_argument("--bs", type=int, default=256, help="grid chunk size")
     ap.add_argument("--basis", type=str, default="6-31G(d,p)",
                     help="PySCF basis (sets grid partitioning only)")
@@ -248,8 +295,8 @@ def main():
 
     for rd in args.results_dir:
         en = grid_energy_from_checkpoint(
-            rd, grid_level=args.grid_level, basis=args.basis,
-            chunk=args.bs, recompute=args.recompute)
+            rd, grid_level=args.grid_level, aux_grid_level=args.aux_grid_level,
+            basis=args.basis, chunk=args.bs, recompute=args.recompute)
         _print_energy(rd, en)
 
 

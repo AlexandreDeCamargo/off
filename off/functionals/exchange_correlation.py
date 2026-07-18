@@ -70,9 +70,9 @@ def b88_eps(den, score, x, Ne, mol, xp, clip_cte=1e-30, beta=0.0042):
     grad_den_norm_sq = lax.expand_dims(score_sqr, (1,)) * den_clipped * den_clipped
     log_grad_den_norm = jnp.log2(jnp.clip(grad_den_norm_sq, clip_cte)) / 2
     log_x_sigma = log_grad_den_norm - 4 / 3.0 * log_den
-    x_sigma = 2 ** log_x_sigma
-    b88_e = -(beta * 2 ** (4 * log_den / 3 + 2 * log_x_sigma
-                           - jnp.log2(1 + 6 * beta * x_sigma * jnp.arcsinh(x_sigma))))
+    x_phys = 2 ** (log_x_sigma - jnp.log2(Ne) / 3.0)
+    b88_e = -(beta * 2 ** (log_den / 3 + 2 * log_x_sigma
+                           - jnp.log2(1 + 6 * beta * x_phys * jnp.arcsinh(x_phys))))
     return b88_e * Ne ** (2 / 3)
 
 
@@ -109,7 +109,7 @@ def vwn_eps(den, score, x, Ne, mol, xp, clip_cte=1e-30):
     A, b, c, x0 = 0.0621814, 3.72744, 12.9352, -0.10498
     den_clipped = jnp.where(den > clip_cte, den, 0.0)
     log_den = jnp.log2(jnp.clip(den_clipped, clip_cte))
-    log_rs = jnp.log2((3 / (4 * jnp.pi)) ** (1 / 3)) - log_den / 3.0
+    log_rs = jnp.log2((3 / (4 * jnp.pi)) ** (1 / 3)) - (log_den + jnp.log2(Ne)) / 3.0
     log_x = log_rs / 2
     x_ = 2. ** log_x
     X = 2. ** (2. * log_x) + 2. ** (log_x + jnp.log2(b)) + c
@@ -153,7 +153,7 @@ def pw92_eps(den, score, x, Ne, mol, xp, clip_cte=1e-30):
     A_, alpha1 = 0.031091, 0.21370
     beta1, beta2, beta3, beta4 = 7.5957, 3.5876, 1.6382, 0.49294
     log_den = jnp.log2(jnp.clip(den, clip_cte))
-    log_rs = jnp.log2((3 / (4 * jnp.pi)) ** (1 / 3)) - log_den / 3.0
+    log_rs = jnp.log2((3 / (4 * jnp.pi)) ** (1 / 3)) - (log_den + jnp.log2(Ne)) / 3.0
     brs_1_2 = 2 ** (log_rs / 2 + jnp.log2(beta1))
     ars = 2 ** (log_rs + jnp.log2(alpha1))
     brs = 2 ** (log_rs + jnp.log2(beta2))
