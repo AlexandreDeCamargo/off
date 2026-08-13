@@ -34,13 +34,14 @@ def setup_model(coords, z, hidden_layer: int, key):
 
 
 def setup_optimizer(flow_model, epochs: int, lr: float, scheduler_type: str):
-    """Setup optimizer with scheduler."""
+    """Setup the optimizer for the neural velocity field only."""
     _lr = get_scheduler(epochs=epochs, sched_type=scheduler_type, lr=lr)
     optimizer = optax.chain(
         optax.clip_by_global_norm(1.0),
         optax.adamw(_lr, weight_decay=1e-5)
     )
-    optimizer_state = optimizer.init(eqx.filter(flow_model, eqx.is_array))
+    trainable_flow = flow_model.flow.flow
+    optimizer_state = optimizer.init(eqx.filter(trainable_flow, eqx.is_inexact_array))
     return optimizer, optimizer_state
 
 

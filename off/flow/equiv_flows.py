@@ -18,7 +18,12 @@ class _Flow(eqx.Module):
         
         self.linear_in = eqx.nn.Linear(din + 1, dim, key=keys[0])
         self.blocks = [eqx.nn.Linear(dim, dim, key=k) for k in jax.random.split(keys[1], 3)]
-        self.linear_out = eqx.nn.Linear(dim, din, key=keys[2])        
+        linear_out = eqx.nn.Linear(dim, 1, key=keys[2])
+        self.linear_out = eqx.tree_at(
+            lambda layer: (layer.weight, layer.bias),
+            linear_out,
+            (jnp.zeros_like(linear_out.weight), jnp.zeros_like(linear_out.bias)),
+        )
 
     def __call__(
         self, 
@@ -38,8 +43,8 @@ class _Flow(eqx.Module):
         return x
 
 class Radial_MLP(eqx.Module):
-    xyz_nuclei : Array
-    z_one_hot : Array
+    xyz_nuclei: Array
+    z_one_hot: Array
     flow: _Flow
 
     def __init__(
@@ -50,7 +55,7 @@ class Radial_MLP(eqx.Module):
         z_one_hot
         ):
         din_flow = 1 + z_one_hot.shape[-1]
-        self.xyz_nuclei = xyz_nuclei[:,None,:] 
+        self.xyz_nuclei = xyz_nuclei[:, None, :]
         self.z_one_hot = z_one_hot
         self.flow = _Flow(din_flow, dim, key=key)
 

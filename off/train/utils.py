@@ -17,23 +17,44 @@ def step(
     """Carry out a training step.
 
     Args:
-        params: Flow model
+        flow_model: Complete CNF model. Only its neural velocity field is trained.
         batch: Arguments passed to the loss function (often the static components
             of the model).
         optimizer: Optax optimizer.
         optimizer_state: Optimizer state.
-        loss_fn: The loss function. This should take params and static as the first two
-            arguments.
+        loss_fn: Loss function whose first arguments are the model and batch.
 
     Returns:
-        tuple: (loss_val, params, optmizer state)
+        tuple: (loss value, updated model, optimizer state)
     """
-    # Compute loss and gradients
-    loss, grads = eqx.filter_value_and_grad(loss_fn, has_aux=True)(flow_model, batch,*loss_args)
-    
-    # Update the model parameters
-    updates, optimizer_state = optimizer.update(grads, optimizer_state,flow_model)
-    flow_model = eqx.apply_updates(flow_model, updates)
+    # Nuclear positions and species descriptors are fixed inputs, not parameters.
+    # Differentiate and optimize only the neural velocity field.
+    trainable_flow = flow_model.flow.flow
+
+    def trainable_loss(candidate_flow):
+        candidate_model = eqx.tree_at(
+            lambda model: model.flow.flow,
+            flow_model,
+            candidate_flow,
+        )
+        return loss_fn(candidate_model, batch, *loss_args)
+
+    loss, grads = eqx.filter_value_and_grad(
+        trainable_loss,
+        has_aux=True,
+    )(trainable_flow)
+
+    updates, optimizer_state = optimizer.update(
+        grads,
+        optimizer_state,
+        trainable_flow,
+    )
+    trainable_flow = eqx.apply_updates(trainable_flow, updates)
+    flow_model = eqx.tree_at(
+        lambda model: model.flow.flow,
+        flow_model,
+        trainable_flow,
+    )
     
     return loss, flow_model, optimizer_state
 
