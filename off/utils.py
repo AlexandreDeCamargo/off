@@ -217,9 +217,9 @@ def get_scheduler(epochs: int, sched_type: str = 'zero', lr: float = 3E-4):
                 peak_value=lr,
                 warmup_steps=150,
                 decay_steps=int(2*epochs/3),
-                end_value=1E-6,
+                end_value=1E-7,
             )
-            constant_scheduler_max = optax.constant_schedule(1E-6)
+            constant_scheduler_max = optax.constant_schedule(1E-7)
             return optax.join_schedules([init_scheduler_min,
                                         constant_scheduler_max], boundaries=[2*epochs/3, 3*epochs/3])
         elif sched_type == 'mix_old':

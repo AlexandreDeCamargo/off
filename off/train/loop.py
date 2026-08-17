@@ -36,10 +36,7 @@ def setup_model(coords, z, hidden_layer: int, key):
 def setup_optimizer(flow_model, epochs: int, lr: float, scheduler_type: str):
     """Setup the optimizer for the neural velocity field only."""
     _lr = get_scheduler(epochs=epochs, sched_type=scheduler_type, lr=lr)
-    optimizer = optax.chain(
-        optax.clip_by_global_norm(1.0),
-        optax.adamw(_lr, weight_decay=1e-5)
-    )
+    optimizer = optax.adamw(_lr, weight_decay=1e-5)
     trainable_flow = flow_model.flow.flow
     optimizer_state = optimizer.init(eqx.filter(trainable_flow, eqx.is_inexact_array))
     return optimizer, optimizer_state
@@ -221,7 +218,9 @@ def training(mol_name: str,
         df_ema.to_csv(f"{Config.results_dir}/training_metrics_ema.csv", index=False)
         
         # Save checkpoint
-        if itr % checkpoint_freq == 0 or itr == epochs:
+        if (itr % checkpoint_freq == 0
+                or (itr >= max(0, epochs - 1000) and (epochs - itr) % 100 == 0)
+                or itr == epochs):
             eqx.tree_serialise_leaves(f"{checkpoint_dir}/checkpoint_{itr}.eqx", flow_model)
 
         # Large-batch MC energy evaluation (forward only, no gradients)
