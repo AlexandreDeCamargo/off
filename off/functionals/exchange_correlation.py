@@ -39,7 +39,10 @@ def b88_eps(den, score, x, Ne, mol, xp, clip_cte=1e-30, beta=0.0042):
     See eq. 8 in https://journals.aps.org/pra/abstract/10.1103/PhysRevA.38.3098
     See also https://github.com/ElectronicStructureLibrary/libxc/blob/master/maple/gga_exc/gga_x_b88.mpl
 
-    E_{\text{X}}^{\text{B88}}[\rho] = -\beta \int \frac{X^2}{1 + 6\beta X \sinh^{-1}(X)} \rho(\boldsymbol{x})^{4/3} d\boldsymbol{x},
+    Spin-unpolarised (closed-shell) limit of Becke's eq. 8, which is a sum over spin
+    channels: setting \rho_\sigma = \rho/2 gives X_\sigma = 2^{1/3} X and
+
+    E_{\text{X}}^{\text{B88}}[\rho] = -2^{1/3}\beta \int \frac{X^2}{1 + 6\beta\, 2^{1/3} X \sinh^{-1}(2^{1/3} X)} \rho(\boldsymbol{x})^{4/3} d\boldsymbol{x},
     \qquad X = \frac{|\nabla \rho|}{\rho^{4/3}}.
 
     Parameters
@@ -71,8 +74,9 @@ def b88_eps(den, score, x, Ne, mol, xp, clip_cte=1e-30, beta=0.0042):
     log_grad_den_norm = jnp.log2(jnp.clip(grad_den_norm_sq, clip_cte)) / 2
     log_x_sigma = log_grad_den_norm - 4 / 3.0 * log_den
     x_phys = 2 ** (log_x_sigma - jnp.log2(Ne) / 3.0)
-    b88_e = -(beta * 2 ** (log_den / 3 + 2 * log_x_sigma
-                           - jnp.log2(1 + 6 * beta * x_phys * jnp.arcsinh(x_phys))))
+    x_cs = 2 ** (1 / 3.0) * x_phys
+    b88_e = -(beta * 2 ** (1 / 3.0 + log_den / 3 + 2 * log_x_sigma
+                           - jnp.log2(1 + 6 * beta * x_cs * jnp.arcsinh(x_cs))))
     return b88_e * Ne ** (2 / 3)
 
 

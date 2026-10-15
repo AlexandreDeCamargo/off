@@ -42,7 +42,7 @@ class NuclearPotential(eqx.Module):
             Electron-nuclei attraction at each point (up to the rho factor).
         """
         def _potential(pts, molecule):
-            r = jnp.sqrt(jnp.sum((pts - molecule['coords']) ** 2, axis=1)) + self.clip_cte
+            r = jnp.sqrt(jnp.sum((pts - molecule['coords']) ** 2, axis=1) + self.clip_cte ** 2)
             return molecule['z'] / r
 
         r = vmap(_potential, in_axes=(None, 0), out_axes=-1)(x, mol)
