@@ -71,7 +71,7 @@ def b88_eps(den, score, x, Ne, mol, xp, clip_cte=1e-30, beta=0.0042):
     log_den = jnp.log2(den_clipped)
     score_sqr = jnp.einsum('ij,ij->i', score, score)
     grad_den_norm_sq = lax.expand_dims(score_sqr, (1,)) * den_clipped * den_clipped
-    log_grad_den_norm = jnp.log2(jnp.clip(grad_den_norm_sq, clip_cte)) / 2
+    log_grad_den_norm = jnp.log2(jnp.clip(grad_den_norm_sq, clip_cte ** 2)) / 2
     log_x_sigma = log_grad_den_norm - 4 / 3.0 * log_den
     x_phys = 2 ** (log_x_sigma - jnp.log2(Ne) / 3.0)
     x_cs = 2 ** (1 / 3.0) * x_phys
