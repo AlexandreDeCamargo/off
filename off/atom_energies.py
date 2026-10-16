@@ -13,7 +13,7 @@ quantity (total atomic energy); the only difference is grid quadrature vs the
 Monte-Carlo EMA estimate during training.
 
 Directory layout assumed (same as main.py):
-    {results_root}/{atom}/{method}/bl_0.0000/
+    {results_root}/{atom}/{method}/bl_0.00/
         Checkpoints/checkpoint_*.eqx
         training_metrics_ema.csv
         job_params.json
@@ -49,7 +49,7 @@ parser.add_argument("--atoms", type=str, nargs="+",
                     default=["B", "Be", "C", "F", "H", "He", "Li", "N", "Ne", "O"],
                     help="Atoms to process (default: the full set).")
 parser.add_argument("--results_root", type=str, default="Results",
-                    help="Root dir holding {atom}/{method}/bl_0.0000 (default: Results)")
+                    help="Root dir holding {atom}/{method}/bl_0.00 (default: Results)")
 parser.add_argument("--window", type=int, default=1000,
                     help="Average the last N rows of training_metrics_ema.csv (default: 1000)")
 parser.add_argument("--bs", type=int, default=256, help="Grid chunk size")
@@ -89,7 +89,7 @@ print(f"EMA window   : last {args.window} rows\n")
 
 rows = []
 for atom in args.atoms:
-    atom_dir = root / atom / args.method / "bl_0.0000"
+    atom_dir = root / atom / args.method / "bl_0.00"
     print(f"[{atom}]  {atom_dir}")
 
     if not (atom_dir / "job_params.json").exists():

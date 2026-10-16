@@ -35,7 +35,7 @@ def setup_directories(args):
     """Create and return directory paths for results, checkpoints, and figures.
 
     Layout:  Results/{mol}/{method}/bl_{bond_length}/
-      - Single atoms always use bl_0.0000 (bond length has no meaning).
+      - Single atoms always use bl_0.00 (bond length has no meaning).
       - Diatomics/polyatomics use the supplied --bond_length value.
     This makes bond-length scans trivial:
       glob('Results/H2/{method}/bl_*/')

@@ -32,7 +32,6 @@ off/Plots/
 Narval_off/
 Nibi_off/
 check_eval_bs.py
-collect_quad.py
 debug_grid_failures.py
 density_frames/
 examples/.ipynb_checkpoints/
@@ -56,7 +55,6 @@ plot_ema_curve.py
 plot_pes_ema.py
 plot_pes_grid.py
 plot_pes_mc.py
-quadrature_scan.py
 run_hutcheon_test.sh
 sanity_atomdb_sample.py
 sanity_sir_ess.py
